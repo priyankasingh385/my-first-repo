@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns:cloudhub="http://www.mulesoft.org/schema/mule/cloudhub"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/cloudhub http://www.mulesoft.org/schema/mule/cloudhub/current/mule-cloudhub.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="af186ee7-bbb0-45c2-a0da-ea8619b21072" >
+		<http:listener-connection host="0.0.0.0" port="9091" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="738a26cc-61bd-4e9c-a258-0ef5dca17048" file="config.yaml" />
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="d581896a-d185-4996-9030-c2e2f0978b04" >
+		<salesforce:basic-connection username="ipriankasingh@gmail.com" password="blahblah1!" securityToken="4YOCXSJdlXbQhuNZOIn4aFCN" />
+	</salesforce:sfdc-config>
+	<cloudhub:config name="CloudHub_Config" doc:name="CloudHub Config" doc:id="604f0da5-b9ad-4576-81ad-b419787a9928" >
+		<cloudhub:connection username="APISERO385" password="capsLock1!" environment="8674c710-e5fb-43ea-94c0-3d380bea7370">
+			<reconnection />
+		</cloudhub:connection>
+	</cloudhub:config>
+	<json-logger:config name="JSON_Logger_Config" doc:name="JSON Logger Config" doc:id="da4d72a5-c83e-4cee-9df3-6d94222a3371" environment="${mule.env}" />
+	<flow name="SmallBusinessFlow" doc:id="fc0ffb81-4c88-4a98-a9fb-ac33f3c0c055" initialState="started">
+		<salesforce:replay-topic-listener topic="querySF" replayOption="FROM_REPLAY_ID" doc:name="Replay topic listener" doc:id="26080635-e9a5-49ce-9ff5-e0b76424928a" config-ref="Salesforce_Config" autoReplay="true" replayId="-2"/>
+		<json-logger:logger doc:name="Logger" doc:id="eb8b2c7f-d380-48bc-ae37-f2a2e39509b9" config-ref="JSON_Logger_Config" message='#["Topic querySF output"]' tracePoint="AFTER_REQUEST"/>
+		<set-variable doc:name="accountId" doc:id="21345e82-d769-40d4-be51-88fa6566215c" variableName="accountId" value='#[%dw 2.0
+output application/json
+---
+payload.Id]'/>
+		<set-variable value="#[payload.AccountNumber]" doc:name="groupNum" doc:id="e57a646f-e6dc-4cda-bfd9-61ad1726b02e" variableName="groupNum" mimeType="application/java" />
+		<scatter-gather doc:name="Scatter-Gather" doc:id="020e133b-5018-4b26-b649-2fe0a9dcf70c" >
+			<route >
+				<salesforce:query doc:name="QueryAccount" doc:id="229be056-ecf0-4fa6-8233-732a6f863547" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query ><![CDATA[select Id, Name, AccountNumber, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry
+from Account 
+where Id = ':Id']]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[Id : vars.accountId]]]></salesforce:parameters>
+				</salesforce:query>
+				<set-variable value="#[payload]" doc:name="accountPayload" doc:id="ff2b81bb-5f13-47b4-a17a-b0abb15d3285" variableName="accountOutput" />
+			</route>
+			<route >
+				<salesforce:query doc:name="QueryContact" doc:id="b3b3345e-83cc-44f2-968b-151dcc9f31b5" config-ref="Salesforce_Config">
+					<salesforce:salesforce-query ><![CDATA[select Name, MobilePhone, AccountId  from Contact
+where AccountId IN (select Id from Account where Id = ':Id')]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[Id : vars.accountId]]]></salesforce:parameters>
+				</salesforce:query>
+				<set-variable value="#[payload]" doc:name="contactPayload" doc:id="67bcedba-1447-4c5a-9770-8d6963bd6598" variableName="contactOutput"/>
+			</route>
+		</scatter-gather>
+		<json-logger:logger doc:name="Logger" doc:id="1dc0840f-b1f9-4871-9dfd-45fbeeae0ba5" config-ref="JSON_Logger_Config" message='#["ICE Request"]' tracePoint="AFTER_TRANSFORM"/>
+		<ee:transform doc:name="Transform Message" doc:id="fe479451-5d11-461a-9a05-1380d4bf168e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	groupId: vars.accountOutput.AccountNumber[0],
+	businessLevel: p('Common.businessLevel'),
+	groupName: vars.accountOutput.Name[0],
+	effectiveDate: vars.accountOutput.Effective_Date__c,
+		MailingAddress: {
+		Address1: vars.accountOutput.ShippingStreet[0],
+		ZipCode: vars.accountOutput.ShippingPostalCode[0],
+		City: vars.accountOutput.ShippingCity[0],
+		State: vars.accountOutput.ShippingState[0],
+		Country: vars.accountOutput.ShippingCountry[0]
+	},
+	//Name, MobilePhone, AccountId  from Contact
+	Contacts: [{
+		FirstName: vars.contactOutput.FirstName[0],
+		LastName: vars.contactOutput.LastName[0],
+		PhoneNumber: vars.contactOutput.Phone[0],
+		EffectiveDate: vars.contactOutput.Contact_Effective_Date__c[0],
+		}],
+	Contract: {
+		ContractId : if (vars.accountOutput.ShippingState[0] == "NJ")
+        				p('ContractId.NJ')
+        			else
+        				p('ContractId.CT'),
+		EffectiveDate: vars.accountOutput.Effective_Date__c[0],
+		ContractPeriod: {
+			EffectiveDate: vars.accountOutput.Effective_Date__c[0],
+			SmallGropPlanType: p('Common.smallGroupPlanType')
+		}
+	},
+	BankAccountNumber: if(vars.accountOutput.ShippingState[0] == "CT")
+						{
+							Number: p('Common.bankAccountNum'),
+							EffectiveDate: vars.accountOutput.Effective_Date__c[0]	
+						}		
+						else [],					
+	MedicalCOBUseDefault: p('Common.medicalCOBUseDefault'),
+	AOBStates : if (vars.accountOutput.ShippingState[0] == "NJ") 
+						splitBy(p('AOBStates.NJ'), ",")
+				  else 
+				  		p('AOBStates.CT'),
+				  		
+	SIC: vars.accountOutput.Sic[0],
+	EligValidationId:p('Common.eligValidationId'),
+	MediaProfileId: p('Common.mediaProfileId'),
+	CardProdParmId: p('Common.cardProdParmId'),
+	userId: vars.accountOutput.LastModifiedById[0]
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<http:request method="GET" doc:name="Request" doc:id="101b50ee-e9e9-450d-9806-d5a4df33ddd6" url="http://ddnj-setpayload4demo.us-e2.cloudhub.io/setpayloa" outputMimeType="application/json"/>
+		<cloudhub:create-notification doc:name="Create Notification" doc:id="8e997c3a-9973-4deb-91cc-616543198e0a" config-ref="CloudHub_Config" domain="mule-test-ddnj-v1" priority="INFO">
+			<cloudhub:message><![CDATA[#["Info Alert!!! The Account updated is - " ++ vars.accountOutput.AccountNumber[0]]]]></cloudhub:message>
+		</cloudhub:create-notification>
+		<json-logger:logger doc:id="46694863-fac1-4283-9726-ac3cd9d21206" config-ref="JSON_Logger_Config" message='#["The updated Account ID is " : vars.accountId]' tracePoint="END">
+			<json-logger:content ><![CDATA[#[import modules::JSONLoggerModule output application/json 
+---
+{
+    payload: JSONLoggerModule::stringifyNonJSON(payload) 
+}]]]></json-logger:content>
+		</json-logger:logger>
+		<logger level="INFO" doc:name="Logger" doc:id="f9b5c900-c48b-42a2-beda-7627e024e019" message='#["Welcome !!! The updated Account ID is " : vars.accountId]'/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f3bddafb-3fcb-49f9-876d-4f1447a0ca4b" type="ANY">
+				<cloudhub:create-notification domain="mule-test-ddnj-v1" doc:name="Create Notification" doc:id="89459805-3633-4a8f-8c2d-1dc7a48bebeb" config-ref="CloudHub_Config" priority="ERROR">
+					<cloudhub:message><![CDATA[#["Error occurred while processing the request for the Account " ++ vars.accountOutput.AccountNumber[0]]]]></cloudhub:message>
+				</cloudhub:create-notification>
+				<json-logger:logger doc:name="Logger" doc:id="367d0da8-efab-4036-a8f0-9337ab779e98" config-ref="JSON_Logger_Config" message='#["Detailed Error Description"]' tracePoint="EXCEPTION" priority="ERROR">
+					<json-logger:content ><![CDATA[#[{
+	Cause: error.cause,
+	Descroption: error.description
+}]]]></json-logger:content>
+				</json-logger:logger>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="SmallBusinessFalttened" doc:id="0d44282e-15e4-4121-b9c7-9e6d18009b49" initialState="stopped">
+		<salesforce:replay-topic-listener topic="querySF" replayOption="FROM_REPLAY_ID" doc:name="Replay topic listener" doc:id="dc15155f-9055-4913-a38a-e4081a7cb621" config-ref="Salesforce_Config" autoReplay="true" replayId="-2"/>
+		<set-variable value="#[%dw 2.0
+output application/json
+---
+payload.Id]" doc:name="accountId" doc:id="f32c8a2c-9743-4df3-96a6-a6d9149958da" variableName="accountId" />
+		<set-variable value="#[payload]" doc:name="allPayload" doc:id="4a58d97b-a357-4698-afc5-8fd61ed89ac7" variableName="allPayload" />
+		<scatter-gather doc:name="Scatter-Gather" doc:id="3f26643c-1d37-4ca6-baa2-765e8d493d72" >
+			<route >
+				<salesforce:query doc:name="QueryAccount" doc:id="b32a6abd-fd43-454b-b736-630b0889c1df" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[select Id, Name, AccountNumber, Effective_Date__c, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry
+from Account 
+where Id = ':Id']]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[Id : vars.accountId]]]></salesforce:parameters>
+				</salesforce:query>
+			</route>
+			<route >
+				<salesforce:query doc:name="QueryContact" doc:id="f0779367-26f6-41b7-b080-5de1466dbf3f" config-ref="Salesforce_Config" >
+					<salesforce:salesforce-query ><![CDATA[select Name, MobilePhone, AccountId  from Contact
+where AccountId IN (select Id from Account where Id = ':Id')]]></salesforce:salesforce-query>
+					<salesforce:parameters ><![CDATA[#[Id : vars.accountId]]]></salesforce:parameters>
+				</salesforce:query>
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Flattentheoutput" doc:id="cf6fb7c5-19d1-4094-af35-2acdc434b254" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="788ef89f-8ea1-4166-8642-f1249717a564" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+import * from dw::core::Strings
+output application/json
+---
+{
+    groupId : payload[0].AccountNumber,
+    parentGroupId: "",
+    businessLevel: "G",
+    groupName: "Small Business Master Group",
+    effectiveDate: payload[0].Effective_Date__c as Date,
+    MailingAddress: [{
+        Address1: payload[0].ShippingStreet,
+        Address2: "",
+        ZipCode: payload[0].ShippingPostalCode,
+        City: payload[0].ShippingCity,
+        State: payload[0].ShippingState,
+        Country: payload[0].ShippingCountry
+    }],
+    Contacts: [{
+        FirstName: substringBefore(payload[1].Name, " "),
+        LastName: substringAfter(payload[1].Name, " "),
+        PhoneNumber: payload[1].MobilePhone,
+    }],
+    Contract:
+    {
+        ContractId : if (payload[0].ShippingState == "NJ")
+        				p('ContractId.NJ')
+        			else
+        				p('ContractId.CT'),
+        EffectiveDate : payload[0].Effective_Date__c as Date,
+        ContractPeriod :
+        {
+        	EffectiveDate:  payload[0].Effective_Date__c as Date as String {format: 'yyyy-MMM-dd'},
+    		SmallGroupPlanType: "P"
+    	},
+        
+    },
+    BankAccountNumber ://a condition to be put based on planId
+    {
+    	Number : p('BankAccNum.CT'),
+    	EffectiveDate : payload[0].Effective_Date__c
+    },
+    MedicalCOBUseDefault : "Y",
+    AOBStates : if (payload[0].ShippingState == "NJ") 
+						splitBy(p('AOBStates.NJ'), ",")
+				  else 
+				  		p('AOBStates.CT'),
+	SIC : "0762",
+	EligValidationId : "EV_BASE11",
+	MediaProfileId : "SMBALLIED",
+	Plan : 
+	{
+		"PH" : "Place Holder"
+	},
+	userId: "jbloggs"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="ec74a1fa-b8c5-47a6-ba40-ddc18a1159fb" message='#["Welcome !!! The updated Account ID is " : vars.accountId]' />
+	</flow>
+</mule>

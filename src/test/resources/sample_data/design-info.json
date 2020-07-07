@@ -1,0 +1,18 @@
+{
+  "sampleData": {
+    "3c6ec25f-d159-4b6d-b58c-c376d64df6ce": {
+      "payload": "sample_data/unknown.dwl"
+    },
+    "6d979582-3684-4df9-b16c-d7e72137299c": {
+      "vars-accountPayload": "sample_data/list_object.dwl"
+    },
+    "fe479451-5d11-461a-9a05-1380d4bf168e": {
+      "vars-contactPayload": "sample_data/list_account.dwl",
+      "vars-accountPayload": "sample_data/list_Account_1.dwl",
+      "payload": "sample_data/object.dwl"
+    },
+    "788ef89f-8ea1-4166-8642-f1249717a564": {
+      "payload": "sample_data/list_json.json"
+    }
+  }
+}

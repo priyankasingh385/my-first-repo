@@ -1,0 +1,31 @@
+Common: 
+  businessLevel: "G"
+  businessLevel_SubLoc: "S"
+  medicalCOBUseDefault: "Y"
+  smallGroupPlanType: "P"
+  eligValidationId: "EV_BASE11"
+  mediaProfileId: "SMBALLIED"
+  cardProdParmId: "CPP_SMALLBIZ"
+  bankAccountNum: "851715578"
+
+AOBStates: 
+  NJ: "AL,CA,CO,CT,ID,IL,MA,NJ,RI"
+  CT: "CT"
+  
+ContractId:
+  NJ: "40113"
+  CT: "41113"
+
+Options:
+  Maximum: "Maximum"
+  Deductible: "Deductible"
+
+https:
+  host: "ddnj-setpayload4demo-https.us-e2.cloudhub.io"
+  path: "/setpayload"
+  method: "GET"
+  url: "https://ddnj-setpayload4demo-https.us-e2.cloudhub.io/setpayload"
+  
+json.logger.application.name: "mule-test-DDNJ"
+json.logger.application.version: "1.0.0"
+mule.env: "Dev"
